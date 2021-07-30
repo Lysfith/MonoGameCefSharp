@@ -1,6 +1,7 @@
 # MonoGameCefSharp
 
 It's an example project to show a way to integrate CefSharp in MonoGame.
+Work at 4K@60
 
 For more fluidity, build the project in release.
 
