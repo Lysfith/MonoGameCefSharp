@@ -39,9 +39,12 @@ namespace MonoGameCefSharp
 
         public override void Initialize()
         {
-            var settings = new CefSettings();
+            var settings = new CefSettings(); ;
             settings.RemoteDebuggingPort = 8088;
             settings.CachePath = Directory.GetCurrentDirectory() + "\\cache";
+            settings.WindowlessRenderingEnabled = true;
+            settings.CefCommandLineArgs.Add("enable-media-stream", "1"); //Enable WebRTC
+            settings.CefCommandLineArgs.Add("no-proxy-server", "1"); //Don't use a proxy server, always make direct connections. Overrides any other proxy server flags that are passed.
             settings.WindowlessRenderingEnabled = true;
 
             if (!Cef.Initialize(settings, performDependencyCheck: true, browserProcessHandler: new BrowserProcessHandler()))
@@ -138,11 +141,11 @@ namespace MonoGameCefSharp
                 return;
             }
 
-            var p = _renderHandler.BitmapBuffer.Buffer;
-            for (int i = 0; i < _renderHandler.BitmapBuffer.Buffer.Length / 4; i++)
+            Buffer.BlockCopy(_renderHandler.BitmapBuffer.Buffer, 0, _pixelsBuffer, 0, _renderHandler.BitmapBuffer.Buffer.Length);
+
+            for (int i = 0; i < _pixelsBuffer.Length; i++)
             {
-                var index = i * 4;
-                _pixelsBuffer[i] = ColorToUint(p[index + 3], p[index + 0], p[index + 1], p[index + 2]);
+                _pixelsBuffer[i] = (_pixelsBuffer[i] & 0x000000ff) << 16 | (_pixelsBuffer[i] & 0x0000FF00) | (_pixelsBuffer[i] & 0x00FF0000) >> 16 | (_pixelsBuffer[i] & 0xFF000000);
             }
 
             _texture.SetData(_pixelsBuffer);
