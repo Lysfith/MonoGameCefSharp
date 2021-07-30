@@ -12,9 +12,6 @@ namespace MonoGameCefSharp
 {
     public class UiManager : BaseManager
     {
-        private const int _width = 1920;
-        private const int _height = 1080;
-
         private static UiManager _instance;
 
         public static UiManager Instance
@@ -33,7 +30,12 @@ namespace MonoGameCefSharp
         private RequestContext requestContext;
         private ChromiumWebBrowser browser;
         private Texture2D _texture;
-        private System.Drawing.Rectangle _textureRect;
+        private DefaultRenderHandler _renderHandler;
+        private uint[] _pixelsBuffer;
+        private int _previousWheelValue;
+        private ButtonState _previousLeftButtonState;
+        private ButtonState _previousMiddleButtonState;
+        private ButtonState _previousRightButtonState;
 
         public override void Initialize()
         {
@@ -54,10 +56,17 @@ namespace MonoGameCefSharp
             requestContext = new RequestContext(requestContextSettings);
             browser = new ChromiumWebBrowser(SharedDataManager.Url, browserSettings, requestContext);
 
-            browser.Size = new Size(_width, _height);
+            browser.Size = new Size(SharedDataManager.Width, SharedDataManager.Height);
+            browser.Paint += Browser_Paint;
+            _renderHandler = browser.RenderHandler as DefaultRenderHandler;
 
-            _texture = new Texture2D(SharedDataManager.Instance.GraphicsDevice, _width, _height);
-            _textureRect = new System.Drawing.Rectangle(0, 0, _width, _height);
+            _texture = new Texture2D(SharedDataManager.Instance.GraphicsDevice, SharedDataManager.Width, SharedDataManager.Height, false, SurfaceFormat.Color);
+            _pixelsBuffer = new uint[SharedDataManager.Width * SharedDataManager.Height];
+        }
+
+        private void Browser_Paint(object sender, OnPaintEventArgs e)
+        {
+            UpdateTexture();
         }
 
         public override void Update(GameTime gameTime)
@@ -68,27 +77,33 @@ namespace MonoGameCefSharp
             }
 
             var mouseState = Mouse.GetState();
+            var host = browser.GetBrowser().GetHost();
 
-            if (mouseState.LeftButton == ButtonState.Pressed)
+            if (_previousLeftButtonState == ButtonState.Released && mouseState.LeftButton == ButtonState.Pressed)
             {
-                browser.GetBrowser().GetHost().SendMouseClickEvent(mouseState.X, mouseState.Y, MouseButtonType.Left, false, 1, CefEventFlags.None);
-                browser.GetBrowser().GetHost().SendMouseClickEvent(mouseState.X, mouseState.Y, MouseButtonType.Left, true, 1, CefEventFlags.None);
-                browser.GetBrowser().GetHost().SendMouseMoveEvent(mouseState.X, mouseState.Y, false, CefEventFlags.LeftMouseButton);
+                host.SendMouseClickEvent(mouseState.X, mouseState.Y, MouseButtonType.Left, false, 1, CefEventFlags.None);
+                host.SendMouseClickEvent(mouseState.X, mouseState.Y, MouseButtonType.Left, true, 1, CefEventFlags.None);
+                host.SendMouseMoveEvent(mouseState.X, mouseState.Y, false, CefEventFlags.LeftMouseButton);
             }
-            else if (mouseState.RightButton == ButtonState.Pressed)
+            else if (_previousRightButtonState == ButtonState.Released && mouseState.RightButton == ButtonState.Pressed)
             {
-                browser.GetBrowser().GetHost().SendMouseMoveEvent(mouseState.X, mouseState.Y, false, CefEventFlags.RightMouseButton);
+                host.SendMouseMoveEvent(mouseState.X, mouseState.Y, false, CefEventFlags.RightMouseButton);
             }
-            else if (mouseState.MiddleButton == ButtonState.Pressed)
+            else if (_previousMiddleButtonState == ButtonState.Released && mouseState.MiddleButton == ButtonState.Pressed)
             {
-                browser.GetBrowser().GetHost().SendMouseMoveEvent(mouseState.X, mouseState.Y, false, CefEventFlags.MiddleMouseButton);
+                host.SendMouseMoveEvent(mouseState.X, mouseState.Y, false, CefEventFlags.MiddleMouseButton);
             }
             else
             {
-                browser.GetBrowser().GetHost().SendMouseMoveEvent(mouseState.X, mouseState.Y, false, CefEventFlags.None);
+                host.SendMouseMoveEvent(mouseState.X, mouseState.Y, false, CefEventFlags.None);
             }
 
-            UpdateTexture(SharedDataManager.Instance.GraphicsDevice);
+            host.SendMouseWheelEvent(mouseState.X, mouseState.Y, 0, mouseState.ScrollWheelValue - _previousWheelValue, CefEventFlags.None);
+
+            _previousWheelValue = mouseState.ScrollWheelValue;
+            _previousLeftButtonState = mouseState.LeftButton;
+            _previousMiddleButtonState = mouseState.MiddleButton;
+            _previousRightButtonState = mouseState.RightButton;
         }
 
         public override void Draw(GameTime gameTime)
@@ -116,57 +131,26 @@ namespace MonoGameCefSharp
             Cef.Shutdown();
         }
 
-        public void UpdateTexture(GraphicsDevice graphicsDevice)
+        public void UpdateTexture()
         {
-            var bitmap = browser.ScreenshotOrNull()?.Clone() as Bitmap;
-            if(bitmap == null)
+            if (_renderHandler.BitmapBuffer.Buffer == null)
             {
                 return;
             }
-            UpdateTexture2DFromBitmap(graphicsDevice, bitmap, _texture);
+
+            var p = _renderHandler.BitmapBuffer.Buffer;
+            for (int i = 0; i < _renderHandler.BitmapBuffer.Buffer.Length / 4; i++)
+            {
+                var index = i * 4;
+                _pixelsBuffer[i] = ColorToUint(p[index + 3], p[index + 0], p[index + 1], p[index + 2]);
+            }
+
+            _texture.SetData(_pixelsBuffer);
         }
 
-        public void UpdateTexture2DFromBitmap(GraphicsDevice device, Bitmap bitmap, Texture2D texture)
+        private uint ColorToUint(byte a, byte r, byte g, byte b)
         {
-            ///================================================
-            /// Best performance but color error
-            ///=================================================
-            //var data = bitmap.LockBits(_textureRect, System.Drawing.Imaging.ImageLockMode.ReadOnly, bitmap.PixelFormat);
-
-            //int bufferSize = data.Height * data.Stride;
-
-            ////create data buffer 
-            //var bytes = new byte[bufferSize];
-
-            //// copy bitmap data into buffer
-            //Marshal.Copy(data.Scan0, bytes, 0, bufferSize);
-
-            //// unlock the bitmap data
-            //bitmap.UnlockBits(data);
-
-            //// copy our buffer to the texture
-            //texture.SetData(bytes);
-
-            ///================================================
-            /// Color correction
-            ///=================================================
-
-            uint[] m_PixelsBuffer = new uint[bitmap.Width * bitmap.Height];
-
-            unsafe
-            {
-                System.Drawing.Imaging.BitmapData origdata =
-                    bitmap.LockBits(_textureRect, System.Drawing.Imaging.ImageLockMode.ReadOnly, bitmap.PixelFormat);
-                uint* byteData = (uint*)origdata.Scan0;
-                for (int i = 0; i < m_PixelsBuffer.Length; i++)
-                {
-                    m_PixelsBuffer[i] = (byteData[i] & 0x000000ff) << 16 | (byteData[i] & 0x0000FF00) | (byteData[i] & 0x00FF0000) >> 16 | (byteData[i] & 0xFF000000);
-                }
-                //bitmap.UnlockBits(origdata);
-            }
-            texture.SetData(m_PixelsBuffer);
-
-            bitmap.Dispose();
+            return (uint)(((a << 24) | (r << 16) | (g << 8) | b) & 0xffffffff);
         }
     }
 }

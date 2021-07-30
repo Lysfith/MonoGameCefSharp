@@ -31,16 +31,16 @@ namespace MonoGameCefSharp
         /// </summary>
         protected override void Initialize()
         {
-            graphics.PreferredBackBufferWidth = width;
-            graphics.PreferredBackBufferHeight = height;
+            graphics.PreferredBackBufferWidth = SharedDataManager.Width;
+            graphics.PreferredBackBufferHeight = SharedDataManager.Height;
             graphics.PreferMultiSampling = true;
             graphics.GraphicsProfile = GraphicsProfile.HiDef;
             graphics.ApplyChanges();
 
             SharedDataManager.Instance.GraphicsDevice = GraphicsDevice;
             SharedDataManager.Instance.Window = Window;
-            SharedDataManager.Instance.ScreenWidth = width;
-            SharedDataManager.Instance.ScreenHeight = height;
+            SharedDataManager.Instance.ScreenWidth = SharedDataManager.Width;
+            SharedDataManager.Instance.ScreenHeight = SharedDataManager.Height;
 
             SharedDataManager.Instance.Initialize();
             UiManager.Instance.Initialize();
