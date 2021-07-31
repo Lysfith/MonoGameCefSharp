@@ -26,9 +26,11 @@ namespace MonoGameCefSharp
         public const string Url = "https://html5test.com";
         //public const string Url = "https://youtu.be/dR-4vgED8pQ?t=687";
 
-        
+
         public const int Width = 1920;
         public const int Height = 1080;
+        //public const int Width = 3840;
+        //public const int Height = 2160;
 
         public int ScreenWidth { get; set; }
         public int ScreenHeight { get; set; }

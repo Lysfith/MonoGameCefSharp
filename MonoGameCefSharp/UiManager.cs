@@ -39,15 +39,22 @@ namespace MonoGameCefSharp
 
         public override void Initialize()
         {
-            var settings = new CefSettings(); ;
-            settings.RemoteDebuggingPort = 8088;
-            settings.CachePath = Directory.GetCurrentDirectory() + "\\cache";
-            settings.WindowlessRenderingEnabled = true;
-            settings.CefCommandLineArgs.Add("enable-media-stream", "1"); //Enable WebRTC
-            settings.CefCommandLineArgs.Add("no-proxy-server", "1"); //Don't use a proxy server, always make direct connections. Overrides any other proxy server flags that are passed.
-            settings.WindowlessRenderingEnabled = true;
+            Cef.EnableHighDPISupport();
 
-            if (!Cef.Initialize(settings, performDependencyCheck: true, browserProcessHandler: new BrowserProcessHandler()))
+            var settings = new CefSettings()
+            {
+                //By default CefSharp will use an in-memory cache, you need to specify a Cache Folder to persist data
+                CachePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CefSharp\\Cache")
+            };
+            settings.WindowlessRenderingEnabled = true;
+            settings.CefCommandLineArgs.Add("enable-media-stream"); //Enable WebRTC
+            settings.CefCommandLineArgs.Add("use-fake-ui-for-media-stream");
+            settings.CefCommandLineArgs.Add("enable-usermedia-screen-capturing");
+            settings.CefCommandLineArgs.Add("no-proxy-server"); //Don't use a proxy server, always make direct connections. Overrides any other proxy server flags that are passed.
+            settings.CefCommandLineArgs.Remove("mute-audio");
+            settings.WindowlessRenderingEnabled = false;
+
+            if (!Cef.Initialize(settings, performDependencyCheck: true, browserProcessHandler: null))
             {
                 throw new Exception("Unable to Initialize Cef");
             }
@@ -60,16 +67,10 @@ namespace MonoGameCefSharp
             browser = new ChromiumWebBrowser(SharedDataManager.Url, browserSettings, requestContext);
 
             browser.Size = new Size(SharedDataManager.Width, SharedDataManager.Height);
-            browser.Paint += Browser_Paint;
             _renderHandler = browser.RenderHandler as DefaultRenderHandler;
 
             _texture = new Texture2D(SharedDataManager.Instance.GraphicsDevice, SharedDataManager.Width, SharedDataManager.Height, false, SurfaceFormat.Color);
             _pixelsBuffer = new uint[SharedDataManager.Width * SharedDataManager.Height];
-        }
-
-        private void Browser_Paint(object sender, OnPaintEventArgs e)
-        {
-            UpdateTexture();
         }
 
         public override void Update(GameTime gameTime)
@@ -107,6 +108,8 @@ namespace MonoGameCefSharp
             _previousLeftButtonState = mouseState.LeftButton;
             _previousMiddleButtonState = mouseState.MiddleButton;
             _previousRightButtonState = mouseState.RightButton;
+
+            
         }
 
         public override void Draw(GameTime gameTime)
@@ -115,6 +118,8 @@ namespace MonoGameCefSharp
             {
                 return;
             }
+
+            UpdateTexture();
 
             var spriteBatch = SharedDataManager.Instance.SpriteBatch;
 
